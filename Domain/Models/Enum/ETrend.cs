@@ -1,4 +1,4 @@
-﻿namespace ElderCare.Data.Ingestion.Service.Models.Enum
+﻿namespace ElderCare.Data.Ingestion.Domain.Models.Enum
 {
     public enum ETrend
     {

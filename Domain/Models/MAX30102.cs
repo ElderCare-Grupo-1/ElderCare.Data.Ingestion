@@ -1,26 +1,24 @@
-﻿using ElderCare.Data.Ingestion.Service.Models.Abstractions;
-using ElderCare.Data.Ingestion.Service.Models.Enum;
+﻿using ElderCare.Data.Ingestion.Domain.Models.Abstractions;
 
-namespace ElderCare.Data.Ingestion.Service.Models
+namespace ElderCare.Data.Ingestion.Domain.Models
 {
     public class MAX30102 : GenericSensor<double>
     {
-
         private double _previousSp02 = 95.0;
+
         public MAX30102()
         {
             SensorId = 101;
-            Unit = EUnit.Percentage;
         }
 
-        public override double GenerateValue()
+        public override object GenerateValue(params object[] parameters)
         {
             var (dcR, dcIr) = GenerateDcrIr();
             var (acR, acIr) = GenerateAcrAndIr();
 
-            var spO2 = ((acR / dcR) / (acIr / dcIr)) * 100;
+            var spO2 = acR / dcR / (acIr / dcIr) * 100;
 
-            if(spO2 > 100)
+            if (spO2 > 100)
                 spO2 = 100;
             if (spO2 < 0)
                 spO2 = 0;
@@ -29,12 +27,10 @@ namespace ElderCare.Data.Ingestion.Service.Models
             _previousSp02 = Data;
 
 
-            return Data; 
+            return Data;
         }
 
-
-
-        private (double DcR, double DcIr) GenerateDcrIr()
+        private static (double DcR, double DcIr) GenerateDcrIr()
         {
             const int sampleRate = 20;
 
@@ -45,8 +41,8 @@ namespace ElderCare.Data.Ingestion.Service.Models
             var ratioLedR = ledR > 0 ? (double)ledR / 50 : 0;
             var ratioLedIr = ledIr > 0 ? (double)ledIr / 50 : 0;
 
-            var dcR = (ratioLedR * (adcFullScale / 2048.0) * (100.0 / pulseWidth)) * sampleRate;
-            var dcIr = (ratioLedIr * (adcFullScale / 2048.0) * (100.0 / pulseWidth)) * sampleRate;
+            var dcR = ratioLedR * (adcFullScale / 2048.0) * (100.0 / pulseWidth) * sampleRate;
+            var dcIr = ratioLedIr * (adcFullScale / 2048.0) * (100.0 / pulseWidth) * sampleRate;
 
             dcR = Math.Max(dcR, 0.1);
             dcIr = Math.Max(dcIr, 0.1);
@@ -56,7 +52,7 @@ namespace ElderCare.Data.Ingestion.Service.Models
 
 
 
-        private (double AcR, double AcIr) GenerateAcrAndIr()
+        private static (double AcR, double AcIr) GenerateAcrAndIr()
         {
             const int sampleRate = 50;
 
@@ -68,11 +64,8 @@ namespace ElderCare.Data.Ingestion.Service.Models
             var ratioLedR = ledR > 0 ? (double)ledR / 50 : 0;
             var ratioLedIr = ledIr > 0 ? (double)ledIr / 50 : 0;
 
-            var randomFactorR = Random.Shared.NextDouble() * (1.5 - 0.5) + 0.5;
-            var randomFactorIr = Random.Shared.NextDouble() * (1.5 - 0.5) + 0.5;
-
-            var acR = (ratioLedR * (adcFullScale / 2048.0) * (100.0 / pulseWidth)) * sampleRate * randomFactorR;
-            var acIr = (ratioLedIr * (adcFullScale / 2048.0) * (100.0 / pulseWidth)) * sampleRate * randomFactorIr;
+            var acR = ratioLedR * (adcFullScale / 2048.0) * (100.0 / pulseWidth) * sampleRate * MathHelper.GetUniform(0.5, 1.5);
+            var acIr = ratioLedIr * (adcFullScale / 2048.0) * (100.0 / pulseWidth) * sampleRate * MathHelper.GetUniform(0.5, 1.5);
 
             return (acR, acIr);
         }
@@ -81,8 +74,6 @@ namespace ElderCare.Data.Ingestion.Service.Models
         {
             return alpha * currentSpO2 + (1 - alpha) * _previousSp02;
         }
-
-
 
     }
 }

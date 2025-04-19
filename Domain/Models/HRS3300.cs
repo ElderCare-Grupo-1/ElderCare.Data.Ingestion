@@ -1,20 +1,19 @@
-﻿using ElderCare.Data.Ingestion.Service.Models.Abstractions;
-using ElderCare.Data.Ingestion.Service.Models.Enum;
+﻿using ElderCare.Data.Ingestion.Domain.Models.Abstractions;
+using ElderCare.Data.Ingestion.Domain.Models.Enum;
 
-namespace ElderCare.Data.Ingestion.Service.Models
+namespace ElderCare.Data.Ingestion.Domain.Models
 {
     public class HRS3300 : GenericSensor<int>
     {
         private int PreviousData { get; set; } = Random.Shared.Next(75, 110);
         private ETrend Trend { get; set; }
 
-
         public HRS3300()
         {
             SensorId = 103;
-            Unit = EUnit.BeatsPerMinute;
         }
-        public override int GenerateValue()
+
+        public override object GenerateValue(params object[] parameters)
         {
             GenerateHeartBeat();
             PreviousData = Data;
@@ -29,7 +28,7 @@ namespace ElderCare.Data.Ingestion.Service.Models
 
             var variation = Trend switch
             {
-                (ETrend)0 => Random.Shared.Next(3, 7),
+                0 => Random.Shared.Next(3, 7),
                 (ETrend)1 => Random.Shared.Next(-7, -3),
                 _ => Random.Shared.Next(-5, 5)
             };
@@ -45,5 +44,7 @@ namespace ElderCare.Data.Ingestion.Service.Models
             };
 
         }
+
+
     }
 }

@@ -1,31 +1,26 @@
-﻿using System.Data;
-using Dapper;
-using ElderCare.Data.Ingestion.Service.Models.Abstractions;
+﻿using Dapper;
 using MySql.Data.MySqlClient;
-using Newtonsoft.Json;
+using System.Data;
 
 namespace ElderCare.Data.Ingestion.Repository
 {
     public class SensorRespository : ISensorRepository
     {
-        private readonly IDbConnection _connection = new MySqlConnection()
-        {
-            ConnectionString = "Server=localhost;Port=3306;Database=elder_care;Uid=root;Pwd=#G567%^1w0;",
-        };
-
-        public async Task<int> SaveSensorDataAsync<T>(GenericSensor<T> sensor)
+        public async Task<int> SaveSensorDataAsync<T>(T data, int sensorId)
         {
             try
             {
-                OpenConnection();
+                await using var connection = new MySqlConnection("Server=localhost;Port=3306;Database=elder_care;Uid=root;Pwd=urubu100;");
 
-                const string query = "INSERT INTO raw_data(value, timestamp, sensor_idsensor) VALUES (@Data,@Timestamp, @SensorId)";
-                
-                var parameters = new { sensor.Data, Timestamp = DateTime.Now,  sensor.SensorId };
+                await connection.OpenAsync();
 
-                var result = await _connection.ExecuteAsync(query, parameters);
+                const string query = "INSERT INTO raw_data(value, timestamp, sensor_idsensor) VALUES (@Data, @Timestamp, @SensorId)";
 
-                Console.WriteLine($"Sensor data saved successfully: {JsonConvert.SerializeObject(sensor)}");
+                var parameters = new { Data = data, Timestamp = DateTime.Now, SensorId = sensorId };
+
+                var result = await connection.ExecuteAsync(query, parameters);
+
+                Console.WriteLine($"Sensor data saved successfully: {(data, sensorId).ToString()}");
                 return result;
             }
             catch (Exception e)
@@ -33,22 +28,6 @@ namespace ElderCare.Data.Ingestion.Repository
                 Console.WriteLine(e);
                 throw;
             }
-            finally
-            {
-                CloseConnection();
-            }
-        }
-
-        private void OpenConnection()
-        {
-            if (_connection.State != ConnectionState.Open)
-                _connection.Open();
-        }
-
-        private void CloseConnection()
-        {
-            if (_connection.State != ConnectionState.Closed)
-                _connection.Close();
         }
     }
 }
