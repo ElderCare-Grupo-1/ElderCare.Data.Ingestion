@@ -10,7 +10,7 @@ namespace ElderCare.Data.Ingestion.Repository
         {
             try
             {
-                await using var connection = new MySqlConnection("Server=localhost;Port=3306;Database=elder_care;Uid=root;Pwd=urubu100;");
+                await using var connection = new MySqlConnection("Server=localhost;Port=3306;Database=elder_care;Uid=root;Pwd=#G567%^1w0;");
 
                 await connection.OpenAsync();
 

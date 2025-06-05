@@ -5,10 +5,11 @@ using ElderCare.Data.Ingestion.Repository;
 using Microsoft.Azure.Devices.Client;
 using System.Text;
 using System.Text.Json;
+using ElderCare.Data.Ingestion.Domain;
 
 namespace ElderCare.Data.Ingestion.Service;
 
-public  class SensorManager
+public class SensorManager
 {
     public readonly ISensorRepository _repository = new SensorRespository();
     private readonly DeviceClient _iotClient = DeviceClient.CreateFromConnectionString(
@@ -19,7 +20,23 @@ public  class SensorManager
     {
         Console.WriteLine("Starting GenerateDataAsync...");
 
-        var localizations = AddLocalizations();
+
+        var randomHouse = Localization.GeneratedRandomHouse(AddLocalizations());
+
+        var start = PathHelper.DefineStartingPoint(randomHouse);
+        var end = PathHelper.GetRandomToGo(randomHouse, start);
+        var path = randomHouse.GetPath(start: start, end: end);
+
+        start = end;
+
+        Console.WriteLine("Path generated:");
+        foreach (var localization in path)
+        {
+            Console.WriteLine($"- {localization.Local}");
+
+        }
+
+        var localizations = path ?? throw new ArgumentNullException(nameof(path));
         Console.WriteLine("Localizations added.");
 
         var globalSensors = AddGlobalSensors();
@@ -31,10 +48,9 @@ public  class SensorManager
         var random = new Random();
 
         var globalSensorsTask = RunGlobalSensorsAsync(globalSensors, token);
-        var localSensorsTask = RunLocalSensorsAsync(localizations, random, token);
+        var localSensorsTask = RunLocalSensorsAsync(randomHouse, start, end, localizations, random, token);
 
         await Task.WhenAll(globalSensorsTask, localSensorsTask);
-
         Console.WriteLine("GenerateDataAsync completed.");
     }
 
@@ -63,12 +79,37 @@ public  class SensorManager
         Console.WriteLine("Global sensors task completed.");
     }
 
-    private async Task RunLocalSensorsAsync(List<Localization> localizations, Random random, CancellationToken token)
+    private async Task RunLocalSensorsAsync(
+     LinkedList<Localization> randomHouse,
+     Localization start,
+     Localization end,
+     List<Localization> localizations,
+     Random random,
+     CancellationToken token
+ )
     {
         Console.WriteLine("Local sensors task started.");
+
+        var pathIndex = 0;
+
         while (!token.IsCancellationRequested)
         {
-            var selectedLocalization = localizations[random.Next(localizations.Count)];
+            if (pathIndex >= localizations.Count)
+            {
+                start = end;
+                end = PathHelper.GetRandomToGo(randomHouse, start);
+                localizations = randomHouse.GetPath(start: start, end: end) ?? throw new ArgumentNullException(nameof(localizations));
+                pathIndex = 0;
+
+                Console.WriteLine("Path generated:");
+                Console.WriteLine("-----------------------------------------------");
+                foreach (var localization in localizations)
+                {
+                    Console.WriteLine($"- {localization.Local}");
+                }
+            }
+
+            var selectedLocalization = localizations[pathIndex];
 
             Console.WriteLine("-----------------------------------------------");
             Console.WriteLine($"[LOCAL] Processing localization: {selectedLocalization.Local}");
@@ -89,7 +130,7 @@ public  class SensorManager
                     selectedLocalization.Luminosity = ldrSensor.Data;
                     Console.WriteLine($"[LOCAL] LDR sensor generated for {selectedLocalization.Local} with luminosity {selectedLocalization.Luminosity}.");
                 }
-                else if(sensor is not MFRC522)
+                else if (sensor is not MFRC522)
                 {
                     var data = sensor.GenerateValue();
                     _repository.SaveSensorDataAsync(data, sensor.SensorId);
@@ -109,6 +150,8 @@ public  class SensorManager
             {
                 break;
             }
+
+            pathIndex++;
         }
 
         Console.WriteLine("Local sensors task completed.");
