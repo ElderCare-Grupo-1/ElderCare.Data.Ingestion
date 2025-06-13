@@ -13,7 +13,7 @@ public class SensorManager
 {
     public readonly ISensorRepository _repository = new SensorRespository();
     private readonly DeviceClient _iotClient = DeviceClient.CreateFromConnectionString(
-        "HostName=edIotHub.azure-devices.net;DeviceId=edDevice01;SharedAccessKey=5FOTMYfhPge07jJnz5QBQGsTzYqdXD2fmthQJQ8Ry3I=",
+        "HostName=EdIoTHubs.azure-devices.net;DeviceId=EdDevice;SharedAccessKey=GniKNTNmVK3sm29ddkcEpYfZpbSnO7BVYVJ++xcwotU=",
         TransportType.Mqtt);
 
     public async Task GenerateDataAsync()
@@ -144,7 +144,7 @@ public class SensorManager
 
             try
             {
-                await Task.Delay(2000, token);
+                await Task.Delay(10000, token);
             }
             catch (TaskCanceledException)
             {
