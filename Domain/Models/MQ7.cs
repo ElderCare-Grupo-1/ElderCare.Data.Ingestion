@@ -20,7 +20,7 @@ namespace ElderCare.Data.Ingestion.Domain.Models
                 rareEvent ?
                     MathHelper.GetUniform(-10, -3) : MathHelper.GetUniform(-2, 2);
 
-            Data = Math.Max(20, Math.Min(actualValue * (1 + percentVariation / 100), 2000));
+            Data = Math.Max(3, Math.Min(actualValue * (1 + percentVariation / 100), 2000));
 
             return Data;
         }

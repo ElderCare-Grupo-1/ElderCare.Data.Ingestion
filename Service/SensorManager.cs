@@ -63,7 +63,7 @@ public class SensorManager
             {
                 var data = g.GenerateValue();
                 _repository.SaveSensorDataAsync(data, g.SensorId);
-                _ = SendToIoTHubAsync(data, g.SensorId);
+                _ = SendToIoTHubAsync(data, g.SensorId, "");
                 Console.WriteLine($"[GLOBAL] Sensor {g.GetType().Name} with SensorId {g.SensorId} value generated: {data}");
             });
 
@@ -126,7 +126,7 @@ public class SensorManager
                 {
                     ldrSensor.GenerateValue(selectedLocalization.Luminosity);
                     _repository.SaveSensorDataAsync(ldrSensor.Data, ldrSensor.SensorId);
-                    _ = SendToIoTHubAsync(ldrSensor.Data, ldrSensor.SensorId);
+                    _ = SendToIoTHubAsync(ldrSensor.Data, ldrSensor.SensorId, selectedLocalization.Local.ToString());
                     selectedLocalization.Luminosity = ldrSensor.Data;
                     Console.WriteLine($"[LOCAL] LDR sensor generated for {selectedLocalization.Local} with luminosity {selectedLocalization.Luminosity}.");
                 }
@@ -134,7 +134,7 @@ public class SensorManager
                 {
                     var data = sensor.GenerateValue();
                     _repository.SaveSensorDataAsync(data, sensor.SensorId);
-                    _ = SendToIoTHubAsync(data, sensor.SensorId);
+                    _ = SendToIoTHubAsync(data, sensor.SensorId, selectedLocalization.Local.ToString());
                     Console.WriteLine($"[LOCAL] Sensor {sensor.GetType().Name} value generated for {selectedLocalization.Local}: {data}");
                 }
                 return Task.CompletedTask;
@@ -211,13 +211,14 @@ public class SensorManager
             new HRS3300()
         ];
     }
-    private async Task SendToIoTHubAsync(object sensorData, int sensorId)
+    private async Task SendToIoTHubAsync(object sensorData, int sensorId, string? local)
     {
         var payload = new
         {
             SensorId = sensorId,
             Timestamp = DateTime.UtcNow,
-            Data = sensorData
+            Data = sensorData,
+            Local = local ?? ""
         };
 
         try
