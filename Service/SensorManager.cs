@@ -190,7 +190,7 @@ public class SensorManager
                 Local = ELocalization.Garage,
                 Luminosity = 0.5,
                 RFID = new MFRC522 { IsActive = false },
-                Sensors = [new MQ7()]
+                Sensors = [new LDR(), new MQ7()]
             },
 
             new Localization
@@ -198,7 +198,7 @@ public class SensorManager
                 Local = ELocalization.Bathroom,
                 Luminosity = 0.5,
                 RFID = new MFRC522 { IsActive = false },
-                Sensors = [new MQ7()]
+                Sensors = [new LDR(), new MQ7()]
             }
         ];
     }
@@ -216,11 +216,12 @@ public class SensorManager
         var payload = new
         {
             SensorId = sensorId,
-            Timestamp = DateTime.UtcNow,
+            Timestamp = DateTime.Now,
             Data = sensorData,
-            Local = local ?? ""
+            Local = local ?? "",
         };
-
+        
+        Console.WriteLine(payload.ToString());
         try
         {
             var json = JsonSerializer.Serialize(payload);
