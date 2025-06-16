@@ -216,7 +216,7 @@ public class SensorManager
         var payload = new
         {
             SensorId = sensorId,
-            Timestamp = DateTime.Now,
+            Timestamp = DateTime.Now.ToString("yyyy-MM-dd hh:mm:ss"),
             Data = sensorData,
             Local = local ?? "",
         };
