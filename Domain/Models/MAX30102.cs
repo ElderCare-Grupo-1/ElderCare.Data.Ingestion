@@ -1,4 +1,5 @@
 ﻿using ElderCare.Data.Ingestion.Domain.Models.Abstractions;
+using ElderCare.Data.Ingestion.Domain.Models.Enum;
 
 namespace ElderCare.Data.Ingestion.Domain.Models
 {
@@ -15,6 +16,28 @@ namespace ElderCare.Data.Ingestion.Domain.Models
         {
             var (dcR, dcIr) = GenerateDcrIr();
             var (acR, acIr) = GenerateAcrAndIr();
+
+            var situation = parameters.Length > 0 && parameters[0] is ESituations s ? s : ESituations.Normal;
+
+            switch (situation)
+            {
+                case ESituations.Normal:
+                    break;
+                case ESituations.Alert:
+                    acR *= 0.8;
+                    acIr *= 0.8;
+                    break;
+                case ESituations.Emergency:
+                    acR *= 0.5;
+                    acIr *= 0.5;
+                    break;
+                case ESituations.Critical:
+                    acR *= 0.2;
+                    acIr *= 0.2;
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(parameters), "Unknown situation");
+            }
 
             var spO2 = acR / dcR / (acIr / dcIr) * 100;
 

@@ -1,4 +1,5 @@
 ﻿using ElderCare.Data.Ingestion.Domain.Models.Abstractions;
+using ElderCare.Data.Ingestion.Domain.Models.Enum;
 
 namespace ElderCare.Data.Ingestion.Domain.Models
 {
@@ -9,22 +10,29 @@ namespace ElderCare.Data.Ingestion.Domain.Models
             SensorId = 202;
         }
 
-        private double GenerateLuminosity(double startLuminosity)
+        private double GenerateLuminosity(double startLuminosity, ESituations situation = ESituations.Normal)
         {
-            Data =
-                Math.Max(0,
-                    Math.Min(1,
-                        MathHelper.GetUniform(-0.1, 0.1) + startLuminosity
-                    )
-                );
+            var variation = situation switch
+            {
+                ESituations.Normal => MathHelper.GetUniform(-0.1, 0.1),
+                ESituations.Alert => MathHelper.GetUniform(-0.3, 0.0) 
+                ,
+                ESituations.Emergency => MathHelper.GetUniform(-0.6, -0.2) 
+                ,
+                ESituations.Critical => MathHelper.GetUniform(-0.9, -0.5) 
+                ,
+                _ => MathHelper.GetUniform(-0.1, 0.1)
+            };
 
+            Data = Math.Max(0, Math.Min(1, startLuminosity + variation));
             return Data;
         }
 
-
         public override object GenerateValue(params object[] parameters)
         {
-            return GenerateLuminosity((double)parameters[0]);
+            var startLuminosity = (double)parameters[0];
+            var situation = parameters.Length > 1 && parameters[1] is ESituations s ? s : ESituations.Normal;
+            return GenerateLuminosity(startLuminosity, situation);
         }
     }
 }

@@ -15,25 +15,51 @@ namespace ElderCare.Data.Ingestion.Domain.Models
 
         public override object GenerateValue(params object[] parameters)
         {
-            GenerateHeartBeat();
+            var situation = parameters.Length > 0 && parameters[0] is ESituations s ? s : ESituations.Normal;
+            GenerateHeartBeat(situation);
             PreviousData = Data;
 
             return Data;
         }
 
-
-        private void GenerateHeartBeat()
+        private void GenerateHeartBeat(ESituations situation = ESituations.Normal)
         {
-            Trend = (ETrend)Random.Shared.Next(0, 2);
-
-            var variation = Trend switch
+            int variation;
+            switch (situation)
             {
-                0 => Random.Shared.Next(3, 7),
-                (ETrend)1 => Random.Shared.Next(-7, -3),
-                _ => Random.Shared.Next(-5, 5)
-            };
+                case ESituations.Normal:
+                    Trend = (ETrend)Random.Shared.Next(0, 2);
+                    variation = Trend switch
+                    {
+                        0 => Random.Shared.Next(3, 7),
+                        (ETrend)1 => Random.Shared.Next(-7, -3),
+                        _ => Random.Shared.Next(-5, 5)
+                    };
+                    break;
+                case ESituations.Alert:
+                    Trend = ETrend.Up;
+                    variation = Random.Shared.Next(5, 12);
+                    break;
+                case ESituations.Emergency:
+                    Trend = ETrend.Up;
+                    variation = Random.Shared.Next(15, 30);
+                    break;
+                case ESituations.Critical:
+                    Trend = (ETrend)Random.Shared.Next(0, 2);
+                    variation = Trend == ETrend.Up
+                        ? Random.Shared.Next(30, 60)
+                        : Random.Shared.Next(-30, -10);
+                    break;
+                default:
+                    Trend = (ETrend)Random.Shared.Next(0, 2);
+                    variation = Random.Shared.Next(-5, 5);
+                    break;
+            }
 
             Data = PreviousData + variation;
+
+            if (Data > 220) Data = 220;
+            if (Data < 30) Data = 30;
 
             Trend = Data switch
             {
@@ -42,7 +68,6 @@ namespace ElderCare.Data.Ingestion.Domain.Models
                 > 95 and < 130 => (ETrend)Random.Shared.Next(0, 1),
                 _ => (ETrend)Random.Shared.Next(0, 2)
             };
-
         }
 
 

@@ -11,10 +11,17 @@ namespace ElderCare.Data.Ingestion.Service;
 
 public class SensorManager
 {
-    public readonly ISensorRepository _repository = new SensorRespository();
+    public readonly ISensorRepository Repository = new SensorRespository();
     private readonly DeviceClient _iotClient = DeviceClient.CreateFromConnectionString(
         "HostName=EdIoTHubs.azure-devices.net;DeviceId=EdDevice;SharedAccessKey=GniKNTNmVK3sm29ddkcEpYfZpbSnO7BVYVJ++xcwotU=",
-        TransportType.Mqtt);
+        TransportType.Mqtt
+    );
+
+    private ESituations _situation = ESituations.Normal;
+    private int _situationRounds = 0;
+    private const int MinRoundsPerSituation = 5;
+    private readonly Random _random = new();
+    private const int Time = 10000;
 
     public async Task GenerateDataAsync()
     {
@@ -56,20 +63,23 @@ public class SensorManager
 
     private async Task RunGlobalSensorsAsync(List<GenericSensorBase> globalSensors, CancellationToken token)
     {
+        
+
         Console.WriteLine("Global sensors task started.");
         while (!token.IsCancellationRequested)
         {
             Parallel.ForEach(globalSensors, g =>
             {
-                var data = g.GenerateValue();
-                _repository.SaveSensorDataAsync(data, g.SensorId);
+                UpdateSituation();
+                var data = g.GenerateValue(_situation);
+                Repository.SaveSensorDataAsync(data, g.SensorId);
                 _ = SendToIoTHubAsync(data, g.SensorId, "Global");
                 Console.WriteLine($"[GLOBAL] Sensor {g.GetType().Name} with SensorId {g.SensorId} value generated: {data}");
             });
 
             try
             {
-                await Task.Delay(1000, token);
+                await Task.Delay(Time, token);
             }
             catch (TaskCanceledException)
             {
@@ -124,19 +134,20 @@ public class SensorManager
             {
                 if (sensor is LDR ldrSensor)
                 {
-                    ldrSensor.GenerateValue(selectedLocalization.Luminosity);
-                    _repository.SaveSensorDataAsync(ldrSensor.Data, ldrSensor.SensorId);
+                    ldrSensor.GenerateValue(selectedLocalization.Luminosity, _situation);
+                    Repository.SaveSensorDataAsync(ldrSensor.Data, ldrSensor.SensorId);
                     _ = SendToIoTHubAsync(ldrSensor.Data, ldrSensor.SensorId, selectedLocalization.Local.ToString());
                     selectedLocalization.Luminosity = ldrSensor.Data;
                     Console.WriteLine($"[LOCAL] LDR sensor generated for {selectedLocalization.Local} with luminosity {selectedLocalization.Luminosity}.");
                 }
                 else if (sensor is not MFRC522)
                 {
-                    var data = sensor.GenerateValue();
-                    _repository.SaveSensorDataAsync(data, sensor.SensorId);
+                    var data = sensor.GenerateValue(_situation);
+                    Repository.SaveSensorDataAsync(data, sensor.SensorId);
                     _ = SendToIoTHubAsync(data, sensor.SensorId, selectedLocalization.Local.ToString());
                     Console.WriteLine($"[LOCAL] Sensor {sensor.GetType().Name} value generated for {selectedLocalization.Local}: {data}");
                 }
+
                 return Task.CompletedTask;
             });
 
@@ -144,7 +155,7 @@ public class SensorManager
 
             try
             {
-                await Task.Delay(10000, token);
+                await Task.Delay(Time, token);
             }
             catch (TaskCanceledException)
             {
@@ -220,7 +231,7 @@ public class SensorManager
             Data = sensorData,
             Local = local ?? "",
         };
-        
+
         Console.WriteLine(payload.ToString());
         try
         {
@@ -238,5 +249,24 @@ public class SensorManager
         {
             Console.WriteLine($"❌ [IOT HUB] Falha ao enviar dados do sensor {sensorId}: {ex.Message}");
         }
+        return; 
+    }
+
+    private ESituations GetRandomSituation(ESituations current)
+    {
+        var values = Enum.GetValues<ESituations>().Where(s => s != current).ToList();
+        return values[_random.Next(values.Count)];
+    }
+
+    private void UpdateSituation()
+    {
+        Console.WriteLine($"Previous situation: {_situation.ToString()}");
+        _situationRounds++;
+        if (_situationRounds < MinRoundsPerSituation) return;
+
+        var newSituation = GetRandomSituation(_situation);
+        _situation = newSituation;
+        _situationRounds = 0;
+        Console.WriteLine($"Situação alterada para: {_situation.ToString()}");
     }
 }
