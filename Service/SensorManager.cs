@@ -63,7 +63,7 @@ public class SensorManager
             {
                 var data = g.GenerateValue();
                 _repository.SaveSensorDataAsync(data, g.SensorId);
-                _ = SendToIoTHubAsync(data, g.SensorId, "");
+                _ = SendToIoTHubAsync(data, g.SensorId, "Global");
                 Console.WriteLine($"[GLOBAL] Sensor {g.GetType().Name} with SensorId {g.SensorId} value generated: {data}");
             });
 
