@@ -1,27 +1,64 @@
-﻿using ElderCare.Data.Ingestion.Domain.Models;
+﻿using Amazon.IotData;
+using Amazon.IotData.Model;
+using ElderCare.Data.Ingestion.Domain;
+using ElderCare.Data.Ingestion.Domain.Models;
 using ElderCare.Data.Ingestion.Domain.Models.Abstractions;
 using ElderCare.Data.Ingestion.Domain.Models.Enum;
 using ElderCare.Data.Ingestion.Repository;
-using Microsoft.Azure.Devices.Client;
+using MQTTnet;
+using MQTTnet.Client;
+using MQTTnet.Server;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
-using ElderCare.Data.Ingestion.Domain;
 
 namespace ElderCare.Data.Ingestion.Service;
 
 public class SensorManager
 {
     public readonly ISensorRepository Repository = new SensorRespository();
-    private readonly DeviceClient _iotClient = DeviceClient.CreateFromConnectionString(
-        "HostName=EdIoTHubs.azure-devices.net;DeviceId=EdDevice;SharedAccessKey=GniKNTNmVK3sm29ddkcEpYfZpbSnO7BVYVJ++xcwotU=",
-        TransportType.Mqtt
-    );
+    //private readonly DeviceClient _iotClient = DeviceClient.CreateFromConnectionString(
+    //    "HostName=EdIoTHubs.azure-devices.net;DeviceId=EdDevice;SharedAccessKey=GniKNTNmVK3sm29ddkcEpYfZpbSnO7BVYVJ++xcwotU=",
+    //    TransportType.Mqtt
+    //);
+
+    private const string ClientId = "sensor_thing";
+    private const string AwsIotEndpoint = "ayl13rzxyyzr0-ats.iot.us-east-1.amazonaws.com";
+    private const string AwsAccessKey = "ASIARXPT57ZMREV7OON7";
+    private const string AwsSecretKey = "nRmNc81j2Nh05Rm22AfC+I8hcfCU2y2taOIOqgwo";
+    private const int Port = 8883;
+    //private const string AwsRegion = "us-east-1"; 
+
+    private static readonly string basePath = Path.Combine(AppContext.BaseDirectory, "Certificates");
+    private static readonly string certPath = Path.Combine(basePath, "sensor_thing.cert");
+    private static readonly string privateKeyPath = Path.Combine(basePath, "sensor_thing.private.key");
+
+    private readonly X509Certificate2 cert = X509Certificate2.CreateFromPemFile(certPath, privateKeyPath);
+    private IMqttClient mqttCliente;
+    private MqttClientOptions options;
 
     private ESituations _situation = ESituations.Normal;
     private int _situationRounds = 0;
     private const int MinRoundsPerSituation = 5;
     private readonly Random _random = new();
     private const int Time = 10000;
+
+    private void InitAwsIotClient()
+    {
+        var factory = new MqttFactory();
+        mqttCliente = factory.CreateMqttClient();
+
+        options = new MqttClientOptionsBuilder()
+            .WithClientId(ClientId)
+            .WithTcpServer(AwsIotEndpoint, Port)
+            .WithTls(new MqttClientOptionsBuilderTlsParameters
+            {
+                UseTls = true,
+                Certificates = new[] { cert },
+                CertificateValidationHandler = _ => true 
+            })
+            .Build();
+    }
 
     public async Task GenerateDataAsync()
     {
@@ -72,8 +109,8 @@ public class SensorManager
             {
                 UpdateSituation();
                 var data = g.GenerateValue(_situation);
-                Repository.SaveSensorDataAsync(data, g.SensorId);
-                _ = SendToIoTHubAsync(data, g.SensorId, "Global");
+                //Repository.SaveSensorDataAsync(data, g.SensorId);
+                _ = SendToAwsIotCoreAsync(data, g.SensorId, "Global");
                 Console.WriteLine($"[GLOBAL] Sensor {g.GetType().Name} with SensorId {g.SensorId} value generated: {data}");
             });
 
@@ -135,16 +172,16 @@ public class SensorManager
                 if (sensor is LDR ldrSensor)
                 {
                     ldrSensor.GenerateValue(selectedLocalization.Luminosity, _situation);
-                    Repository.SaveSensorDataAsync(ldrSensor.Data, ldrSensor.SensorId);
-                    _ = SendToIoTHubAsync(ldrSensor.Data, ldrSensor.SensorId, selectedLocalization.Local.ToString());
+                    //Repository.SaveSensorDataAsync(ldrSensor.Data, ldrSensor.SensorId);
+                    _ = SendToAwsIotCoreAsync(ldrSensor.Data, ldrSensor.SensorId, selectedLocalization.Local.ToString());
                     selectedLocalization.Luminosity = ldrSensor.Data;
                     Console.WriteLine($"[LOCAL] LDR sensor generated for {selectedLocalization.Local} with luminosity {selectedLocalization.Luminosity}.");
                 }
                 else if (sensor is not MFRC522)
                 {
                     var data = sensor.GenerateValue(_situation);
-                    Repository.SaveSensorDataAsync(data, sensor.SensorId);
-                    _ = SendToIoTHubAsync(data, sensor.SensorId, selectedLocalization.Local.ToString());
+                    //Repository.SaveSensorDataAsync(data, sensor.SensorId);
+                    _ = SendToAwsIotCoreAsync(data, sensor.SensorId, selectedLocalization.Local.ToString());
                     Console.WriteLine($"[LOCAL] Sensor {sensor.GetType().Name} value generated for {selectedLocalization.Local}: {data}");
                 }
 
@@ -222,8 +259,18 @@ public class SensorManager
             new HRS3300()
         ];
     }
-    private async Task SendToIoTHubAsync(object sensorData, int sensorId, string? local)
+    
+    private async Task SendToAwsIotCoreAsync(object sensorData, int sensorId, string? local)
     {
+        try
+        {
+            InitAwsIotClient();
+        }
+        catch (Exception e)
+        {
+            throw e;
+        }
+
         var payload = new
         {
             SensorId = sensorId,
@@ -232,24 +279,26 @@ public class SensorManager
             Local = local ?? "",
         };
 
-        Console.WriteLine(payload.ToString());
+        var json = JsonSerializer.Serialize(payload);
+
+        Console.WriteLine(json);
+
+        var request = new PublishRequest
+        {
+            Topic = "eldercare/test_topic",
+            Qos = 0,
+            Payload = new MemoryStream(Encoding.UTF8.GetBytes(json))
+        };
+
         try
         {
-            var json = JsonSerializer.Serialize(payload);
-            var message = new Message(Encoding.UTF8.GetBytes(json))
-            {
-                ContentEncoding = "utf-8",
-                ContentType = "application/json"
-            };
-
-            await _iotClient.SendEventAsync(message);
-            Console.WriteLine($"✔️ [IOT HUB] Dados do sensor {sensorId} enviados com sucesso.");
+            await _awsIotClient!.PublishAsync(request);
+            Console.WriteLine($"✔️ [AWS IOT] Dados do sensor {sensorId} enviados com sucesso.");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"❌ [IOT HUB] Falha ao enviar dados do sensor {sensorId}: {ex.Message}");
+            Console.WriteLine($"❌ [AWS IOT] Falha ao enviar dados do sensor {sensorId}: {ex.Message}");
         }
-        return; 
     }
 
     private ESituations GetRandomSituation(ESituations current)
