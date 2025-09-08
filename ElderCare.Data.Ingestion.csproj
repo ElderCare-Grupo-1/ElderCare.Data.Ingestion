@@ -8,7 +8,35 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Certificates\AmazonRootCA1.pem" />
+    <None Remove="Certificates\d45192dbeaafe9b8cfacfa7c0834b27153d4441a8e84d5c9b23a376b261acc53-certificate.pem.crt" />
+    <None Remove="Certificates\d45192dbeaafe9b8cfacfa7c0834b27153d4441a8e84d5c9b23a376b261acc53-private.pem.key" />
+    <None Remove="Certificates\d45192dbeaafe9b8cfacfa7c0834b27153d4441a8e84d5c9b23a376b261acc53-public.pem.key" />
+    <None Remove="Certificates\device.pfx" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Certificates\AmazonRootCA1.pem">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Certificates\d45192dbeaafe9b8cfacfa7c0834b27153d4441a8e84d5c9b23a376b261acc53-certificate.pem.crt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Certificates\d45192dbeaafe9b8cfacfa7c0834b27153d4441a8e84d5c9b23a376b261acc53-private.pem.key">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Certificates\d45192dbeaafe9b8cfacfa7c0834b27153d4441a8e84d5c9b23a376b261acc53-public.pem.key">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Certificates\device.pfx">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.IotData" Version="4.0.1.4" />
     <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Meadow.MQTT" Version="2.4.0" />
     <PackageReference Include="Microsoft.Azure.Devices.Client" Version="1.42.3" />
     <PackageReference Include="MySql.Data" Version="9.3.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
