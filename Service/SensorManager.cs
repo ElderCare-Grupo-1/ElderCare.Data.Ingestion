@@ -7,7 +7,9 @@ using ElderCare.Data.Ingestion.Domain.Models.Enum;
 using ElderCare.Data.Ingestion.Repository;
 using MQTTnet;
 using MQTTnet.Client;
+using MQTTnet.Client.Options;
 using MQTTnet.Server;
+using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
@@ -22,20 +24,7 @@ public class SensorManager
     //    TransportType.Mqtt
     //);
 
-    private const string ClientId = "sensor_thing";
-    private const string AwsIotEndpoint = "ayl13rzxyyzr0-ats.iot.us-east-1.amazonaws.com";
-    private const string AwsAccessKey = "ASIARXPT57ZMREV7OON7";
-    private const string AwsSecretKey = "nRmNc81j2Nh05Rm22AfC+I8hcfCU2y2taOIOqgwo";
-    private const int Port = 8883;
-    //private const string AwsRegion = "us-east-1"; 
-
     private static readonly string basePath = Path.Combine(AppContext.BaseDirectory, "Certificates");
-    private static readonly string certPath = Path.Combine(basePath, "sensor_thing.cert");
-    private static readonly string privateKeyPath = Path.Combine(basePath, "sensor_thing.private.key");
-
-    private readonly X509Certificate2 cert = X509Certificate2.CreateFromPemFile(certPath, privateKeyPath);
-    private IMqttClient mqttCliente;
-    private MqttClientOptions options;
 
     private ESituations _situation = ESituations.Normal;
     private int _situationRounds = 0;
@@ -43,23 +32,11 @@ public class SensorManager
     private readonly Random _random = new();
     private const int Time = 10000;
 
-    private void InitAwsIotClient()
+    public SensorManager()
     {
-        var factory = new MqttFactory();
-        mqttCliente = factory.CreateMqttClient();
+        System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
-        options = new MqttClientOptionsBuilder()
-            .WithClientId(ClientId)
-            .WithTcpServer(AwsIotEndpoint, Port)
-            .WithTls(new MqttClientOptionsBuilderTlsParameters
-            {
-                UseTls = true,
-                Certificates = new[] { cert },
-                CertificateValidationHandler = _ => true 
-            })
-            .Build();
     }
-
     public async Task GenerateDataAsync()
     {
         Console.WriteLine("Starting GenerateDataAsync...");
@@ -100,7 +77,7 @@ public class SensorManager
 
     private async Task RunGlobalSensorsAsync(List<GenericSensorBase> globalSensors, CancellationToken token)
     {
-        
+
 
         Console.WriteLine("Global sensors task started.");
         while (!token.IsCancellationRequested)
@@ -259,17 +236,9 @@ public class SensorManager
             new HRS3300()
         ];
     }
-    
+
     private async Task SendToAwsIotCoreAsync(object sensorData, int sensorId, string? local)
     {
-        try
-        {
-            InitAwsIotClient();
-        }
-        catch (Exception e)
-        {
-            throw e;
-        }
 
         var payload = new
         {
@@ -283,16 +252,19 @@ public class SensorManager
 
         Console.WriteLine(json);
 
-        var request = new PublishRequest
-        {
-            Topic = "eldercare/test_topic",
-            Qos = 0,
-            Payload = new MemoryStream(Encoding.UTF8.GetBytes(json))
-        };
 
         try
         {
-            await _awsIotClient!.PublishAsync(request);
+            await PublishMessage(
+                "ayl13rzxyyzr0-ats.iot.us-east-1.amazonaws.com",
+                "sensores_thing",
+                "topic/sensores_thing",
+                JsonSerializer.Serialize(payload),
+                Path.Combine(basePath, "d45192dbeaafe9b8cfacfa7c0834b27153d4441a8e84d5c9b23a376b261acc53-certificate.pem.crt"),
+                Path.Combine(basePath, "d45192dbeaafe9b8cfacfa7c0834b27153d4441a8e84d5c9b23a376b261acc53-private.pem.key"),
+                Path.Combine(basePath, "AmazonRootCA1.pem")
+
+            );
             Console.WriteLine($"✔️ [AWS IOT] Dados do sensor {sensorId} enviados com sucesso.");
         }
         catch (Exception ex)
@@ -305,6 +277,46 @@ public class SensorManager
     {
         var values = Enum.GetValues<ESituations>().Where(s => s != current).ToList();
         return values[_random.Next(values.Count)];
+    }
+
+    private async Task PublishMessage(
+        string endpoint,
+        string clientId,
+        string topic,
+        string messagePayload,
+        string certPath,
+        string privateKeyPath,
+        string rootCaPath)
+    {
+        // Carrega o certificado da Thing (X.509) e cria um PFX na memória
+        var deviceCert = X509Certificate2.CreateFromPemFile(certPath, privateKeyPath);
+        var pfxCert = new X509Certificate2(Path.Combine(basePath, "device.pfx"), "1234");
+
+        // Configura o MQTT
+        var options = new MqttClientOptionsBuilder()
+            .WithClientId(clientId)
+            .WithTcpServer(endpoint, 8883) // Porta TLS padrão
+            .WithTls(new MqttClientOptionsBuilderTlsParameters
+            {
+                UseTls = true,
+                Certificates = new[] { pfxCert },
+                CertificateValidationHandler = _ => true, // Pode ajustar conforme necessidade
+                SslProtocol = System.Security.Authentication.SslProtocols.Tls12
+            })
+            .Build();
+
+        var factory = new MqttFactory();
+        var mqttClient = factory.CreateMqttClient();
+
+        await mqttClient.ConnectAsync(options);
+
+        var message = new MqttApplicationMessageBuilder()
+            .WithTopic(topic)
+            .WithPayload(messagePayload)
+            .Build();
+
+        await mqttClient.PublishAsync(message);
+        await mqttClient.DisconnectAsync();
     }
 
     private void UpdateSituation()
