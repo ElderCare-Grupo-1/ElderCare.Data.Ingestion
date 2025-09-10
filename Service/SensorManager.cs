@@ -1,14 +1,17 @@
 ﻿using Amazon.IotData;
 using Amazon.IotData.Model;
+using Amazon.Runtime.Endpoints;
 using ElderCare.Data.Ingestion.Domain;
 using ElderCare.Data.Ingestion.Domain.Models;
 using ElderCare.Data.Ingestion.Domain.Models.Abstractions;
 using ElderCare.Data.Ingestion.Domain.Models.Enum;
 using ElderCare.Data.Ingestion.Repository;
+using Microsoft.Extensions.Options;
 using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
 using MQTTnet.Server;
+using MySqlX.XDevAPI;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -16,7 +19,7 @@ using System.Text.Json;
 
 namespace ElderCare.Data.Ingestion.Service;
 
-public class SensorManager
+public class SensorManager : IDisposable
 {
     public readonly ISensorRepository Repository = new SensorRespository();
     //private readonly DeviceClient _iotClient = DeviceClient.CreateFromConnectionString(
@@ -32,9 +35,36 @@ public class SensorManager
     private readonly Random _random = new();
     private const int Time = 10000;
 
+    private readonly X509Certificate2 _pfxCert;
+    private readonly IMqttClientOptions _options;
+    private const string _endpoint = "ayl13rzxyyzr0-ats.iot.us-east-1.amazonaws.com";
+    private const int _port = 8883;
+    private const string _clientId = "sensores_thing";
+    private const string _topic = "topic/sensores_thing";
+
+    private readonly IMqttClient _mqttClient;
+
     public SensorManager()
     {
-        System.Net.ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+        _pfxCert = new X509Certificate2(Path.Combine(basePath, "device.pfx"), "1234");
+        _options = new MqttClientOptionsBuilder()
+            .WithClientId(_clientId)
+            .WithTcpServer(_endpoint, _port)
+            .WithTls(new MqttClientOptionsBuilderTlsParameters
+            {
+                UseTls = true,
+                Certificates = [_pfxCert],
+                CertificateValidationHandler = _ => true,
+                SslProtocol = System.Security.Authentication.SslProtocols.Tls12
+            })
+            .Build();
+
+        var factory = new MqttFactory();
+        _mqttClient = factory.CreateMqttClient();
+
+        _mqttClient.ConnectAsync(_options).GetAwaiter().GetResult();
+
+        ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
     }
     public async Task GenerateDataAsync()
@@ -255,16 +285,7 @@ public class SensorManager
 
         try
         {
-            await PublishMessage(
-                "ayl13rzxyyzr0-ats.iot.us-east-1.amazonaws.com",
-                "sensores_thing",
-                "topic/sensores_thing",
-                JsonSerializer.Serialize(payload),
-                Path.Combine(basePath, "d45192dbeaafe9b8cfacfa7c0834b27153d4441a8e84d5c9b23a376b261acc53-certificate.pem.crt"),
-                Path.Combine(basePath, "d45192dbeaafe9b8cfacfa7c0834b27153d4441a8e84d5c9b23a376b261acc53-private.pem.key"),
-                Path.Combine(basePath, "AmazonRootCA1.pem")
-
-            );
+            await PublishMessage(JsonSerializer.Serialize(payload));
             Console.WriteLine($"✔️ [AWS IOT] Dados do sensor {sensorId} enviados com sucesso.");
         }
         catch (Exception ex)
@@ -279,44 +300,14 @@ public class SensorManager
         return values[_random.Next(values.Count)];
     }
 
-    private async Task PublishMessage(
-        string endpoint,
-        string clientId,
-        string topic,
-        string messagePayload,
-        string certPath,
-        string privateKeyPath,
-        string rootCaPath)
+    private async Task PublishMessage(string messagePayload)
     {
-        // Carrega o certificado da Thing (X.509) e cria um PFX na memória
-        var deviceCert = X509Certificate2.CreateFromPemFile(certPath, privateKeyPath);
-        var pfxCert = new X509Certificate2(Path.Combine(basePath, "device.pfx"), "1234");
-
-        // Configura o MQTT
-        var options = new MqttClientOptionsBuilder()
-            .WithClientId(clientId)
-            .WithTcpServer(endpoint, 8883) // Porta TLS padrão
-            .WithTls(new MqttClientOptionsBuilderTlsParameters
-            {
-                UseTls = true,
-                Certificates = new[] { pfxCert },
-                CertificateValidationHandler = _ => true, // Pode ajustar conforme necessidade
-                SslProtocol = System.Security.Authentication.SslProtocols.Tls12
-            })
-            .Build();
-
-        var factory = new MqttFactory();
-        var mqttClient = factory.CreateMqttClient();
-
-        await mqttClient.ConnectAsync(options);
-
         var message = new MqttApplicationMessageBuilder()
-            .WithTopic(topic)
+            .WithTopic(_topic)
             .WithPayload(messagePayload)
             .Build();
 
-        await mqttClient.PublishAsync(message);
-        await mqttClient.DisconnectAsync();
+        await _mqttClient.PublishAsync(message);
     }
 
     private void UpdateSituation()
@@ -329,5 +320,11 @@ public class SensorManager
         _situation = newSituation;
         _situationRounds = 0;
         Console.WriteLine($"Situação alterada para: {_situation.ToString()}");
+    }
+
+    public void Dispose()
+    {
+        _mqttClient.DisconnectAsync().GetAwaiter().GetResult();
+        GC.SuppressFinalize(this);
     }
 }
