@@ -121,14 +121,7 @@ public class SensorManager : IDisposable
                 Console.WriteLine($"[GLOBAL] Sensor {g.GetType().Name} with SensorId {g.SensorId} value generated: {data}");
             });
 
-            try
-            {
-                await Task.Delay(Time, token);
-            }
-            catch (TaskCanceledException)
-            {
-                break;
-            }
+            Thread.Sleep(60000);
         }
         Console.WriteLine("Global sensors task completed.");
     }
@@ -197,15 +190,7 @@ public class SensorManager : IDisposable
 
             await Task.WhenAll(sensorTasks);
 
-            try
-            {
-                await Task.Delay(Time, token);
-            }
-            catch (TaskCanceledException)
-            {
-                break;
-            }
-
+            Thread.Sleep(60000);
             pathIndex++;
         }
 
@@ -251,6 +236,14 @@ public class SensorManager : IDisposable
             new Localization
             {
                 Local = ELocalization.Bathroom,
+                Luminosity = 0.5,
+                RFID = new MFRC522 { IsActive = false },
+                Sensors = [new LDR(), new MQ7()]
+            },
+
+            new Localization
+            {
+                Local = ELocalization.Stair,
                 Luminosity = 0.5,
                 RFID = new MFRC522 { IsActive = false },
                 Sensors = [new LDR(), new MQ7()]

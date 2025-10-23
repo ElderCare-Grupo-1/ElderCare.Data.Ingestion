@@ -11,6 +11,7 @@
         Garden,
         Office,
         DiningRoom,
-        Basement
+        Basement,
+        Stair
     }
 }
