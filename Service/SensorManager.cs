@@ -97,7 +97,7 @@ public class SensorManager : IDisposable
 
         var token = cts.Token;
         var random = new Random();
-
+        
         var globalSensorsTask = RunGlobalSensorsAsync(globalSensors, token);
         var localSensorsTask = RunLocalSensorsAsync(randomHouse, start, end, localizations, random, token);
 
@@ -121,7 +121,7 @@ public class SensorManager : IDisposable
                 Console.WriteLine($"[GLOBAL] Sensor {g.GetType().Name} with SensorId {g.SensorId} value generated: {data}");
             });
 
-            Thread.Sleep(60000);
+            await Task.Delay(15000, token);
         }
         Console.WriteLine("Global sensors task completed.");
     }
@@ -190,7 +190,7 @@ public class SensorManager : IDisposable
 
             await Task.WhenAll(sensorTasks);
 
-            Thread.Sleep(60000);
+            await Task.Delay(15000, token); 
             pathIndex++;
         }
 
